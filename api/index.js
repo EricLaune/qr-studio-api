@@ -1,5 +1,4 @@
 const QRCode = require('qrcode');
-const { createCanvas, loadImage } = require('canvas');
 const crypto = require('crypto');
 
 const API_KEYS = new Set([
@@ -79,7 +78,7 @@ module.exports = async (req, res) => {
         'GET /api/v1/stats': 'Get API usage stats'
       },
       authentication: 'Required - Use x-api-key header',
-      pricing: 'Free tier: 100 requests/month'
+      pricing: 'Free tier: 50 requests/month'
     });
   }
   
@@ -116,21 +115,18 @@ module.exports = async (req, res) => {
         height = 400,
         color = '#000000',
         backgroundColor = '#ffffff',
-        logoUrl = null,
-        logoSize = 60,
         margin = 2,
         errorCorrectionLevel = 'M',
-        format = 'png',
-        style = 'square'
+        format = 'png'
       } = req.body || {};
       
       if (!text) {
         return res.status(400).json({ error: 'Text parameter is required' });
       }
       
+      // Generate QR code using only the qrcode package (no canvas)
       const qrOptions = {
         width: width,
-        height: height,
         margin: margin,
         color: {
           dark: color,
@@ -139,42 +135,18 @@ module.exports = async (req, res) => {
         errorCorrectionLevel: errorCorrectionLevel
       };
       
-      const canvas = createCanvas(width, height);
-      const ctx = canvas.getContext('2d');
-      
-      await QRCode.toCanvas(canvas, text, qrOptions);
-      
-      if (style === 'rounded') {
-        ctx.globalCompositeOperation = 'destination-in';
-        ctx.beginPath();
-        ctx.roundRect(0, 0, width, height, 20);
-        ctx.fill();
-        ctx.globalCompositeOperation = 'source-over';
-      }
-      
-      if (logoUrl && format !== 'svg') {
-        try {
-          const logo = await loadImage(logoUrl);
-          const logoX = (width - logoSize) / 2;
-          const logoY = (height - logoSize) / 2;
-          
-          ctx.fillStyle = backgroundColor;
-          ctx.fillRect(logoX - 5, logoY - 5, logoSize + 10, logoSize + 10);
-          
-          ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
-        } catch (logoError) {
-          console.warn('Failed to load logo:', logoError.message);
-        }
-      }
-      
       if (format === 'svg') {
         const svgString = await QRCode.toString(text, { ...qrOptions, type: 'svg' });
         res.setHeader('Content-Type', 'image/svg+xml');
         return res.send(svgString);
       }
       
-      const buffer = canvas.toBuffer(`image/${format}`);
-      res.setHeader('Content-Type', `image/${format}`);
+      // For PNG, generate data URL and convert
+      const dataUrl = await QRCode.toDataURL(text, qrOptions);
+      const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      
+      res.setHeader('Content-Type', 'image/png');
       return res.send(buffer);
     }
     
@@ -189,7 +161,6 @@ module.exports = async (req, res) => {
       
       const qrOptions = {
         width: options.width || 400,
-        height: options.height || 400,
         margin: options.margin || 2,
         color: {
           dark: options.color || '#000000',
@@ -198,10 +169,10 @@ module.exports = async (req, res) => {
         errorCorrectionLevel: options.errorCorrectionLevel || 'M'
       };
       
-      const canvas = createCanvas(qrOptions.width, qrOptions.height);
-      await QRCode.toCanvas(canvas, wifiString, qrOptions);
+      const dataUrl = await QRCode.toDataURL(wifiString, qrOptions);
+      const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
       
-      const buffer = canvas.toBuffer('image/png');
       res.setHeader('Content-Type', 'image/png');
       return res.send(buffer);
     }
@@ -217,7 +188,6 @@ module.exports = async (req, res) => {
       
       const qrOptions = {
         width: options.width || 400,
-        height: options.height || 400,
         margin: options.margin || 2,
         color: {
           dark: options.color || '#000000',
@@ -226,10 +196,10 @@ module.exports = async (req, res) => {
         errorCorrectionLevel: options.errorCorrectionLevel || 'M'
       };
       
-      const canvas = createCanvas(qrOptions.width, qrOptions.height);
-      await QRCode.toCanvas(canvas, vcardString, qrOptions);
+      const dataUrl = await QRCode.toDataURL(vcardString, qrOptions);
+      const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
       
-      const buffer = canvas.toBuffer('image/png');
       res.setHeader('Content-Type', 'image/png');
       return res.send(buffer);
     }
@@ -251,7 +221,6 @@ module.exports = async (req, res) => {
             const {
               text,
               width = 400,
-              height = 400,
               color = '#000000',
               backgroundColor = '#ffffff',
               margin = 2,
@@ -260,7 +229,6 @@ module.exports = async (req, res) => {
             
             const qrOptions = {
               width: width,
-              height: height,
               margin: margin,
               color: {
                 dark: color,
