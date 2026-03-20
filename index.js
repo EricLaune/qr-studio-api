@@ -186,6 +186,98 @@ app.post('/api/v1/batch', async (req, res) => {
   }
 });
 
+// WiFi QR Code endpoint
+app.post('/api/v1/wifi', async (req, res) => {
+  try {
+    const {
+      ssid,
+      password,
+      encryption = 'WPA',
+      color = '#000000',
+      backgroundColor = '#ffffff',
+      width = 400,
+      margin = 2,
+      errorCorrectionLevel = 'M'
+    } = req.body;
+
+    if (!ssid || !password) {
+      return res.status(400).json({ error: 'SSID and password are required' });
+    }
+
+    const wifiString = `WIFI:T:${encryption};S:${ssid};P:${password};;`;
+
+    const qrOptions = {
+      width: width,
+      margin: margin,
+      color: {
+        dark: color,
+        light: backgroundColor
+      },
+      errorCorrectionLevel: errorCorrectionLevel
+    };
+
+    const canvas = createCanvas(width, width);
+    await QRCode.toCanvas(canvas, wifiString, qrOptions);
+    
+    const buffer = canvas.toBuffer('image/png');
+    
+    res.set('Content-Type', 'image/png');
+    res.send(buffer);
+
+  } catch (error) {
+    console.error('WiFi QR generation error:', error);
+    res.status(500).json({ error: 'Failed to generate WiFi QR code', details: error.message });
+  }
+});
+
+// vCard QR Code endpoint
+app.post('/api/v1/vcard', async (req, res) => {
+  try {
+    const {
+      contact,
+      color = '#000000',
+      backgroundColor = '#ffffff',
+      width = 400,
+      margin = 2,
+      errorCorrectionLevel = 'M'
+    } = req.body;
+
+    if (!contact || !contact.name || !contact.phone) {
+      return res.status(400).json({ error: 'Contact name and phone are required' });
+    }
+
+    const { name, phone, email, company, title } = contact;
+    
+    let vcardString = `BEGIN:VCARD\nVERSION:3.0\nFN:${name}\nTEL:${phone}`;
+    if (email) vcardString += `\nEMAIL:${email}`;
+    if (company) vcardString += `\nORG:${company}`;
+    if (title) vcardString += `\nTITLE:${title}`;
+    vcardString += '\nEND:VCARD';
+
+    const qrOptions = {
+      width: width,
+      margin: margin,
+      color: {
+        dark: color,
+        light: backgroundColor
+      },
+      errorCorrectionLevel: errorCorrectionLevel
+    };
+
+    const canvas = createCanvas(width, width);
+    await QRCode.toCanvas(canvas, vcardString, qrOptions);
+    
+    const buffer = canvas.toBuffer('image/png');
+    
+    res.set('Content-Type', 'image/png');
+    res.send(buffer);
+
+  } catch (error) {
+    console.error('vCard QR generation error:', error);
+    res.status(500).json({ error: 'Failed to generate vCard QR code', details: error.message });
+  }
+});
+
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
